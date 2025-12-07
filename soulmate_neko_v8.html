@@ -1,0 +1,529 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Soulmate Neko v8.0 🧬🧘❤️</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            user-select: none;
+            transition: background 1.5s;
+        }
+        canvas { display: block; }
+
+        /* UI 面板 */
+        .panel {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.85);
+            padding: 10px 15px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+            pointer-events: none;
+            transition: opacity 0.5s;
+            backdrop-filter: blur(5px);
+        }
+        #stats-panel { top: 20px; left: 20px; }
+        .stat-row { display: flex; align-items: center; font-size: 12px; color: #666; margin-bottom: 5px; }
+        .stat-bar { width: 70px; height: 6px; background: #eee; border-radius: 3px; margin-left: 8px; overflow: hidden; }
+        .fill { height: 100%; transition: width 0.5s; }
+
+        /* 底部控制栏 - 双层设计 */
+        #controls-container {
+            position: absolute; bottom: 30px;
+            display: flex; flex-direction: column; align-items: center; gap: 10px;
+            pointer-events: auto;
+        }
+        .control-row {
+            display: flex; gap: 10px;
+            background: rgba(255,255,255,0.9);
+            padding: 8px 15px; border-radius: 50px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        button {
+            padding: 8px 16px; border: none; border-radius: 20px;
+            background: transparent; color: #555; cursor: pointer;
+            font-size: 13px; font-weight: bold; transition: all 0.2s;
+            display: flex; align-items: center; gap: 5px;
+        }
+        button:hover { transform: translateY(-2px); color: #ff6b6b; }
+        button.active { background: #ffe0e0; color: #ff4757; }
+
+        /* 特殊按钮样式 */
+        #comfortBtn { background: #fff0f0; color: #ff6b6b; }
+        #zenBtn { background: #f0f8ff; color: #4facfe; }
+
+        /* 功能覆盖层 */
+        #zen-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, #2c3e50 0%, #000000 100%);
+            opacity: 0; pointer-events: none; transition: opacity 2s;
+            z-index: 50; display: flex; justify-content: center; align-items: center; flex-direction: column;
+        }
+        #zen-text {
+            color: rgba(255,255,255,0.9); font-size: 28px; margin-top: 300px;
+            font-family: 'Courier New', serif; letter-spacing: 5px; opacity: 0; transition: opacity 1s;
+        }
+
+        #worry-box {
+            position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%);
+            background: white; padding: 20px; border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            display: none; flex-direction: column; gap: 10px; pointer-events: auto; z-index: 100;
+        }
+        input { padding: 10px; border: 2px solid #eee; border-radius: 10px; width: 250px; outline: none; }
+        #shredBtn { background: #ff6b6b; color: white; padding: 10px; text-align: center; cursor: pointer; border-radius: 10px; }
+
+        #focus-timer {
+            position: absolute; top: 20%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 48px; font-weight: bold; color: #444; text-shadow: 2px 2px 0px white;
+            display: none; pointer-events: none;
+        }
+
+        /* 气泡 */
+        .bubble {
+            position: absolute; background: white; padding: 12px 22px;
+            border-radius: 25px; border-bottom-left-radius: 2px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+            font-size: 14px; color: #444; opacity: 0; pointer-events: none;
+            transition: all 0.5s; max-width: 240px; line-height: 1.6; z-index: 100;
+        }
+
+        /* 垃圾/红心粒子 */
+        .waste { position: absolute; font-size: 24px; animation: float 2s infinite ease-in-out; pointer-events: none; }
+        @keyframes float { 0%,100% {transform:translateY(0)} 50% {transform:translateY(-8px)} }
+    </style>
+</head>
+<body>
+
+    <div id="zen-overlay">
+        <div id="zen-text">吸气...</div>
+    </div>
+
+    <div id="stats-panel" class="panel">
+        <div class="stat-row">❤️ 心情 <div class="stat-bar"><div id="mood-bar" class="fill" style="background:#ff9a9e;width:80%"></div></div></div>
+        <div class="stat-row">⚡ 精力 <div class="stat-bar"><div id="energy-bar" class="fill" style="background:#a18cd1;width:80%"></div></div></div>
+    </div>
+
+    <div id="focus-timer">25:00</div>
+
+    <div id="worry-box">
+        <div style="color:#666; font-size:14px;">写下烦恼，我帮你吃掉：</div>
+        <input type="text" id="worryInput" placeholder="...">
+        <div id="shredBtn">嗷呜一口吃掉！</div>
+        <div style="text-align:right; font-size:12px; color:#999; cursor:pointer;" onclick="document.getElementById('worry-box').style.display='none'">关闭</div>
+    </div>
+
+    <div id="controls-container">
+        <div class="control-row">
+            <button id="feedBtn">🍖 投喂</button>
+            <button id="toyBtn">🧶 逗猫</button>
+            <button id="dressBtn">🎀 换装</button>
+            <button id="cleanBtn">🧹 清理</button>
+        </div>
+        <div class="control-row">
+            <button id="focusBtn">⏳ 专注</button>
+            <button id="worryBtn">🗑️ 碎烦恼</button>
+            <button id="musicBtn">🎵 音乐</button>
+            <button id="zenBtn">🧘 冥想</button>
+            <button id="comfortBtn">🩹 求安慰</button>
+        </div>
+    </div>
+
+    <div id="msg-bubble" class="bubble">...</div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        const groundY = () => height - 50;
+
+        // --- 音频系统 ---
+        let audioCtx, isMusicPlaying = false, musicTimer;
+        const notes = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25];
+        function playNote() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (!isMusicPlaying) return;
+            const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.type = 'sine';
+            const note = notes[Math.floor(Math.random() * notes.length)];
+            osc.frequency.setValueAtTime(Math.random()>0.5?note:note/2, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.05, audioCtx.currentTime+0.1);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+3);
+            osc.start(); osc.stop(audioCtx.currentTime+3);
+            musicTimer = setTimeout(playNote, 2000 + Math.random()*3000);
+        }
+
+        // --- 语录库 ---
+        const comfortPhrases = [
+            "没关系，累了就歇一会儿吧。", "我会一直陪着你，哪也不去。", 
+            "今天的你也辛苦啦，摸摸头~", "深呼吸，烦恼都会飞走的。",
+            "抱抱~ (づ｡◕‿‿◕｡)づ", "不用时刻都那么坚强哦。",
+            "所有的事情最后都会变成好事。", "我在呢，我在呢。",
+            "我们一起发会儿呆吧~"
+        ];
+        const dailyPhrases = ["蹭蹭你~", "记得喝水哦！", "伸个懒腰吧~", "好想你呀~", "今天天气不错呢"];
+
+        // --- 游戏状态 ---
+        const gameState = { mood: 80, energy: 80, isFocusing: false, focusTimeLeft: 25*60, hygiene: 100 };
+        const config = { 
+            mode: 'PHYSICS', // PHYSICS, ZEN, COMFORT, FOCUS
+            laser: false,
+            accessoryIndex: 0,
+            accessories: ['无', '绅士领结', '小雏菊', '墨镜', '皇冠', '红围巾'],
+            wastes: []
+        };
+
+        const mouse = { x: 0, y: 0 };
+        let items = [], particles = [], texts = [];
+
+        // --- 核心猫咪 ---
+        const neko = {
+            x: 0, y: 0, vx: 0, vy: 0, w: 60, h: 50,
+            gravity: 0.5, friction: 0.92, groundDrag: 0.9,
+
+            isDragging: false,
+            state: 'IDLE', // IDLE, WALK, RUN, JUMP, SIT, SLEEP, DRAGGED, FALL, ZEN, COMFORT
+            stateTimer: 0,
+
+            breath: 0, stretch: 1, angle: 0, direction: 1,
+            comfortTimer: 0,
+
+            init: function() { this.x = width/2; this.y = groundY(); },
+
+            update: function() {
+                // 呼吸控制 (冥想时变慢)
+                let breathSpeed = config.mode === 'ZEN' ? 0.015 : 0.05; 
+                this.breath += breathSpeed;
+                this.stateTimer--;
+
+                // --- 模式分支 ---
+
+                // 1. 冥想模式 (ZEN)
+                if (config.mode === 'ZEN') {
+                    this.state = 'ZEN';
+                    // 缓慢移到中心悬浮
+                    this.x += (width/2 - this.x) * 0.05;
+                    this.y += (height/2 + 80 - this.y) * 0.05;
+                    this.vx = 0; this.vy = 0;
+                    return;
+                }
+
+                // 2. 安慰模式 (COMFORT)
+                if (config.mode === 'COMFORT') {
+                    this.state = 'COMFORT';
+                    // 凑近屏幕下方
+                    this.targetX = width/2;
+                    this.targetY = height - 100;
+                    this.x += (this.targetX - this.x) * 0.05;
+                    this.y += (this.targetY - this.y) * 0.05;
+                    this.vx = 0; this.vy = 0;
+
+                    if (this.stateTimer % 200 === 0) chat(comfortPhrases);
+                    return;
+                }
+
+                // 3. 专注模式 (FOCUS)
+                if (config.mode === 'FOCUS') {
+                    let targetX = width - 100;
+                    if (Math.abs(this.x - targetX) > 10) {
+                        this.vx = (targetX - this.x) * 0.05; this.state = 'WALK';
+                    } else {
+                        this.state = 'SIT'; this.vx = 0;
+                    }
+                    this.direction = -1;
+                    // 应用重力以防悬空
+                    this.vy += this.gravity;
+                    if(this.y >= groundY()) { this.y = groundY(); this.vy = 0; }
+                    this.y += this.vy; this.x += this.vx;
+                    return;
+                }
+
+                // 4. 物理模式 (PHYSICS) - 默认
+                // 拖拽
+                if (this.isDragging) {
+                    this.state = 'DRAGGED';
+                    this.vx = (mouse.x - this.x) * 0.2; this.vy = (mouse.y - this.y) * 0.2;
+                    this.x += this.vx; this.y += this.vy;
+                    let speed = Math.sqrt(this.vx*this.vx+this.vy*this.vy);
+                    this.stretch = 1 + Math.min(speed*0.02, 0.5);
+                    this.angle = this.vx * 0.05;
+                    return;
+                } else {
+                    if (this.state === 'DRAGGED') this.state = 'FALL';
+                    this.stretch += (1 - this.stretch) * 0.1;
+                    this.angle *= 0.8;
+                }
+
+                // 物理运动
+                if (this.state !== 'SIT') this.vy += this.gravity;
+                if (this.y >= groundY()) {
+                    this.y = groundY(); this.vy = 0;
+                    if (this.state === 'FALL') { this.state = 'IDLE'; this.stretch = 0.8; }
+                }
+                this.x += this.vx; this.y += this.vy;
+                this.vx *= this.state === 'FALL' ? this.friction : this.groundDrag;
+
+                // 边界
+                if(this.x < 50) {this.x=50;this.vx*=-1;} if(this.x > width-50) {this.x=width-50;this.vx*=-1;}
+
+                // 激光笔
+                if (config.laser) {
+                    this.state = 'RUN';
+                    let dx = mouse.x - this.x; let dy = mouse.y - this.y;
+                    if (Math.sqrt(dx*dx + dy*dy) > 15) { this.x += dx*0.08; this.y += dy*0.08; }
+                    return;
+                }
+
+                // 烦恼粉碎
+                if (texts.length > 0) {
+                    let t = texts[0]; let dx = t.x - this.x;
+                    if (Math.abs(dx) > 50) {
+                        this.state = 'RUN'; this.vx = dx > 0 ? 8 : -8; this.direction = dx > 0 ? 1 : -1;
+                    } else {
+                        this.state = 'EAT'; this.vx = 0;
+                        if (this.stateTimer < 0) this.stateTimer = 40;
+                        if (this.stateTimer === 1) {
+                            for(let i=0;i<20;i++) createParticles(t.x, t.y, '#333');
+                            texts.shift(); chat("好吃！烦恼没了！");
+                        }
+                    }
+                    return;
+                }
+
+                // AI决策
+                if (this.stateTimer <= 0) this.decideMove();
+            },
+
+            decideMove: function() {
+                if(this.state === 'SLEEP') return;
+                let r = Math.random();
+                if (items.length > 0) {
+                    // 追食物
+                    let item = items[0]; let dx = item.x - this.x;
+                    if(Math.abs(dx)<20) { items.shift(); this.state='EAT'; this.stateTimer=60; chat("真香！"); }
+                    else { this.state='RUN'; this.vx=dx>0?6:-6; this.vy=-3; this.stateTimer=30; this.direction=dx>0?1:-1; }
+                } else if (r < 0.02) { this.state='JUMP'; this.vy=-12; this.vx=(Math.random()-0.5)*10; this.stateTimer=60; }
+                else if (r < 0.2) { this.state='WALK'; this.vx=(Math.random()-0.5)*4; this.direction=this.vx>0?1:-1; this.stateTimer=100; }
+                else if (r < 0.25) { this.state='SIT'; this.vx=0; this.stateTimer=200; }
+                else { this.state='IDLE'; this.vx=0; this.stateTimer=100; if(Math.random()<0.3) chat(dailyPhrases); }
+            },
+
+            draw: function() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                // 模式绘制
+                if (config.mode === 'ZEN') {
+                    // 冥想光环
+                    let aura = 80 + Math.sin(this.breath)*30; // 呼吸节奏
+                    ctx.beginPath(); ctx.arc(0,0,aura,0,Math.PI*2);
+                    ctx.fillStyle="rgba(255,255,255,0.15)"; ctx.fill();
+                    ctx.strokeStyle="rgba(255,255,255,0.4)"; ctx.lineWidth=2; ctx.stroke();
+
+                    // 更新文字
+                    const zt = document.getElementById('zen-text');
+                    let phase = Math.sin(this.breath);
+                    if (phase < -0.8) zt.innerText = "吸气... (Inhale)";
+                    else if (phase > 0.8) zt.innerText = "呼气... (Exhale)";
+                    else zt.innerText = "保持... (Hold)";
+                    zt.style.opacity = 0.5 + Math.abs(phase)*0.5;
+                }
+
+                if (this.state === 'DRAGGED') { ctx.rotate(this.angle); ctx.scale(1/this.stretch, this.stretch); }
+                else {
+                    if ((this.state === 'RUN'||this.state === 'WALK') && config.mode==='PHYSICS') ctx.translate(0, -Math.abs(Math.sin(Date.now()*0.01))*5);
+                    if (this.direction === -1) ctx.scale(-1, 1);
+                }
+
+                // 绘制组件
+                this.drawTail();
+                this.drawBody();
+                this.drawPaws();
+                this.drawFace();
+                this.drawAccessory();
+                ctx.restore();
+            },
+
+            // ... (复用之前的绘制函数，略微调整) ...
+            drawBody: function() {
+                ctx.fillStyle='#fff';
+                let h = (this.state==='SIT' || this.state==='ZEN') ? 35 : 45;
+                if (config.mode==='ZEN') { ctx.shadowBlur=30; ctx.shadowColor="white"; } else { ctx.shadowBlur=0; }
+                ctx.beginPath(); ctx.ellipse(0, -h/2+20, 40, h, 0, 0, Math.PI*2); ctx.fill();
+                ctx.shadowBlur=0;
+            },
+            drawFace: function() {
+                let fy = (this.state==='SIT' || this.state==='ZEN') ? 0 : -5;
+                // 耳朵
+                ctx.fillStyle='#fff'; 
+                ctx.beginPath(); ctx.moveTo(-30,fy-10); ctx.lineTo(-40,fy-35); ctx.lineTo(-10,fy-20); ctx.fill();
+                ctx.beginPath(); ctx.moveTo(30,fy-10); ctx.lineTo(40,fy-35); ctx.lineTo(10,fy-20); ctx.fill();
+                ctx.fillStyle='#ffb7b2';
+                ctx.beginPath(); ctx.moveTo(-30,fy-12); ctx.lineTo(-38,fy-30); ctx.lineTo(-15,fy-20); ctx.fill();
+                ctx.beginPath(); ctx.moveTo(30,fy-12); ctx.lineTo(38,fy-30); ctx.lineTo(15,fy-20); ctx.fill();
+
+                // 表情
+                if (config.mode === 'ZEN' || this.state === 'SLEEP') {
+                    // 闭眼
+                    ctx.beginPath(); ctx.strokeStyle='#555'; ctx.lineWidth=2;
+                    ctx.moveTo(-25,fy+5); ctx.quadraticCurveTo(-15,fy+10,-5,fy+5);
+                    ctx.moveTo(25,fy+5); ctx.quadraticCurveTo(15,fy+10,5,fy+5); ctx.stroke();
+                } else if (config.mode === 'COMFORT') {
+                    // 关切眼
+                    ctx.fillStyle='#333'; ctx.beginPath(); ctx.arc(-20,fy+5,6,0,Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(20,fy+5,6,0,Math.PI*2); ctx.fill();
+                    // 眉毛
+                    ctx.beginPath(); ctx.moveTo(-30,fy-5); ctx.lineTo(-10,fy-2); ctx.moveTo(30,fy-5); ctx.lineTo(10,fy-2); ctx.stroke();
+                } else {
+                    // 正常眼
+                    ctx.fillStyle='#333'; ctx.beginPath(); ctx.arc(-20,fy+5,5,0,Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(20,fy+5,5,0,Math.PI*2); ctx.fill();
+                    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(-22,fy+3,2,0,Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(18,fy+3,2,0,Math.PI*2); ctx.fill();
+                }
+
+                // 嘴巴
+                ctx.beginPath(); ctx.strokeStyle='#555'; ctx.lineWidth=2;
+                ctx.moveTo(-3,fy+15); ctx.quadraticCurveTo(0,fy+17,3,fy+15); ctx.stroke();
+                // 腮红
+                if(config.mode!=='ZEN'){
+                    ctx.fillStyle="rgba(255,182,193,0.5)"; 
+                    ctx.beginPath();ctx.arc(-30,fy+18,6,0,Math.PI*2);ctx.fill();
+                    ctx.beginPath();ctx.arc(30,fy+18,6,0,Math.PI*2);ctx.fill();
+                }
+            },
+            drawPaws: function() {
+                ctx.fillStyle='#fff';
+                if (this.state === 'DRAGGED') {
+                    let h=this.stretch*15;
+                    ctx.beginPath();ctx.arc(-20,20+h,8,0,Math.PI*2);ctx.fill(); ctx.beginPath();ctx.arc(20,20+h,8,0,Math.PI*2);ctx.fill();
+                    ctx.beginPath();ctx.arc(-10,40+h,8,0,Math.PI*2);ctx.fill(); ctx.beginPath();ctx.arc(10,40+h,8,0,Math.PI*2);ctx.fill();
+                } else if (config.mode === 'COMFORT') {
+                    // 求抱抱手势
+                    ctx.beginPath();ctx.arc(-45,20,10,0,Math.PI*2);ctx.fill(); ctx.beginPath();ctx.arc(45,20,10,0,Math.PI*2);ctx.fill();
+                    ctx.fillStyle='#ffb7b2'; ctx.beginPath();ctx.arc(-45,20,4,0,Math.PI*2);ctx.fill(); ctx.beginPath();ctx.arc(45,20,4,0,Math.PI*2);ctx.fill();
+                } else if (config.mode === 'ZEN') {
+                     ctx.beginPath();ctx.arc(-15,40,8,0,Math.PI*2);ctx.fill(); ctx.beginPath();ctx.arc(15,40,8,0,Math.PI*2);ctx.fill();
+                } else {
+                    ctx.beginPath();ctx.arc(-20,35,8,0,Math.PI*2);ctx.fill(); ctx.beginPath();ctx.arc(20,35,8,0,Math.PI*2);ctx.fill();
+                }
+            },
+            drawTail: function() {
+                ctx.save(); ctx.translate(0, 40); ctx.rotate(Math.sin(this.breath*5)*0.3);
+                ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(20,-20,30,-10);
+                ctx.strokeStyle='#eee'; ctx.lineWidth=10; ctx.lineCap='round'; ctx.stroke(); ctx.restore();
+            },
+            drawAccessory: function() {
+                let acc = config.accessories[config.accessoryIndex];
+                let fy = (this.state==='SIT' || this.state==='ZEN') ? 0 : -5;
+                if(acc==='绅士领结'){ ctx.fillStyle="#ff6b6b";ctx.beginPath();ctx.arc(0,35,5,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.moveTo(0,35);ctx.lineTo(-15,25);ctx.lineTo(-15,45);ctx.fill();ctx.beginPath();ctx.moveTo(0,35);ctx.lineTo(15,25);ctx.lineTo(15,45);ctx.fill(); }
+                if(acc==='皇冠'){ ctx.fillStyle="#ffd700"; ctx.beginPath(); ctx.moveTo(-15,fy-25); ctx.lineTo(-8,fy-18); ctx.lineTo(0,fy-30); ctx.lineTo(8,fy-18); ctx.lineTo(15,fy-25); ctx.lineTo(15,fy-10); ctx.lineTo(-15,fy-10); ctx.fill(); }
+                if(gameState.isFocusing) {
+                    ctx.strokeStyle="#333";ctx.lineWidth=2; ctx.beginPath();ctx.arc(-20,fy+5,8,0,Math.PI*2);ctx.stroke(); ctx.beginPath();ctx.arc(20,fy+5,8,0,Math.PI*2);ctx.stroke(); ctx.beginPath();ctx.moveTo(-12,fy+5);ctx.lineTo(12,fy+5);ctx.stroke();
+                }
+            }
+        };
+
+        // --- 烦恼类 ---
+        class WorryText {
+            constructor(text) { this.text=text; this.x=width/2; this.y=height/2-100; }
+            draw() { ctx.font="24px Microsoft YaHei"; ctx.fillStyle="#333"; ctx.textAlign="center"; ctx.fillText(this.text,this.x,this.y); }
+        }
+        function createParticles(x, y, color) { for(let i=0;i<10;i++) particles.push({x,y,color,vx:(Math.random()-0.5)*10,vy:(Math.random()-0.5)*10,life:1}); }
+
+        // --- 按钮与交互 ---
+        function chat(text) {
+            const t = Array.isArray(text) ? text[Math.floor(Math.random()*text.length)] : text;
+            const b = document.getElementById('msg-bubble');
+            b.innerText=t; b.style.opacity=1; b.style.left=(neko.x+60)+'px'; b.style.top=(neko.y-100)+'px';
+            setTimeout(()=>b.style.opacity=0, 4000);
+        }
+        function setMode(mode) {
+            config.mode = mode; config.laser = false;
+            document.getElementById('zen-overlay').style.opacity = mode==='ZEN'?0.8:0;
+            document.getElementById('focus-timer').style.display = mode==='FOCUS'?'block':'none';
+            if(mode==='PHYSICS') { neko.state='IDLE'; }
+        }
+
+        document.getElementById('feedBtn').onclick=()=>{items.push({x:Math.random()*width,y:groundY()-20});};
+        document.getElementById('toyBtn').onclick=()=>{neko.vy=-12;chat("起飞！");};
+        document.getElementById('dressBtn').onclick=()=>{config.accessoryIndex=(config.accessoryIndex+1)%config.accessories.length;chat("好看吗？");};
+        document.getElementById('cleanBtn').onclick=()=>{config.wastes.forEach(w=>w.remove());config.wastes=[];chat("干净了！");};
+
+        document.getElementById('zenBtn').onclick=()=>{
+            setMode(config.mode==='ZEN'?'PHYSICS':'ZEN');
+            chat(config.mode==='ZEN'?"让我们一起放松...":"充满电了！");
+        };
+        document.getElementById('comfortBtn').onclick=()=>{
+            setMode('COMFORT'); neko.stateTimer=300; chat("抱抱... (づ｡◕‿‿◕｡)づ");
+        };
+        document.getElementById('focusBtn').onclick=(e)=>{
+            setMode(config.mode==='FOCUS'?'PHYSICS':'FOCUS');
+            if(config.mode==='FOCUS') {
+                chat("我是你的书童！");
+                let t=25*60;
+                let timer=setInterval(()=>{
+                    t--; let m=Math.floor(t/60).toString().padStart(2,'0'), s=(t%60).toString().padStart(2,'0');
+                    document.getElementById('focus-timer').innerText=`${m}:${s}`;
+                    if(t<=0||config.mode!=='FOCUS'){clearInterval(timer);setMode('PHYSICS');}
+                },1000);
+            }
+        };
+        document.getElementById('worryBtn').onclick=()=>{document.getElementById('worry-box').style.display='flex';};
+        document.getElementById('shredBtn').onclick=()=>{
+            const v=document.getElementById('worryInput').value;
+            if(v){texts.push(new WorryText(v));document.getElementById('worryInput').value='';document.getElementById('worry-box').style.display='none';chat("烦恼在哪里？吃掉！");}
+        };
+        document.getElementById('musicBtn').onclick=(e)=>{
+            isMusicPlaying=!isMusicPlaying; e.target.classList.toggle('active');
+            if(isMusicPlaying){playNote();chat("🎵 治愈时刻...");}else{clearTimeout(musicTimer);}
+        };
+
+        window.addEventListener('resize', ()=>{width=canvas.width=window.innerWidth;height=canvas.height=window.innerHeight;neko.init();});
+        window.addEventListener('mousedown', e=>{
+            if(config.mode!=='PHYSICS')return;
+            let dx=e.clientX-neko.x, dy=e.clientY-neko.y;
+            if(Math.sqrt(dx*dx+dy*dy)<60) neko.isDragging=true;
+            mouse.x=e.clientX; mouse.y=e.clientY;
+        });
+        window.addEventListener('mousemove', e=>{mouse.x=e.clientX;mouse.y=e.clientY;});
+        window.addEventListener('mouseup', ()=>{neko.isDragging=false;});
+
+        width=canvas.width=window.innerWidth;height=canvas.height=window.innerHeight;neko.init();
+
+        function animate() {
+            ctx.clearRect(0,0,width,height);
+            // 地面
+            if(config.mode!=='ZEN'){
+                ctx.beginPath();ctx.moveTo(0,groundY());ctx.lineTo(width,groundY());
+                ctx.strokeStyle="#ddd";ctx.stroke();
+            }
+            items.forEach(i=>{ctx.font="30px Arial";ctx.fillText("🍖",i.x-15,i.y);});
+            texts.forEach(t=>t.draw());
+
+            neko.update();
+            neko.draw();
+
+            for(let i=particles.length-1;i>=0;i--){
+                let p=particles[i];ctx.globalAlpha=p.life;ctx.fillStyle=p.color;ctx.fillRect(p.x,p.y,4,4);
+                p.x+=p.vx;p.y+=p.vy;p.life-=0.05;if(p.life<=0)particles.splice(i,1);
+            }
+            ctx.globalAlpha=1;
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+    </script>
+</body>
+</html>
